@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app"
 import { getFirestore } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
 import { getAnalytics, isSupported } from "firebase/analytics"
 
 const firebaseConfig = {
@@ -14,8 +15,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
+export const auth = getAuth(app)
 
-// Analytics is only available in browser environments
 isSupported().then((supported) => {
   if (supported) getAnalytics(app)
 })

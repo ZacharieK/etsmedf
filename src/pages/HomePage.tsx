@@ -1,33 +1,13 @@
 import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { PlusCircle, FileText, List } from "lucide-react"
+import { AppHeader } from "@/components/AppHeader"
+import { PlusCircle, List } from "lucide-react"
 
 export function HomePage() {
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
-            <span className="font-bold text-xl tracking-tight">ETSMEDF</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" asChild>
-              <Link to="/invoices">
-                <List className="h-4 w-4 mr-2" />
-                My Invoices
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link to="/invoices/new">
-                <PlusCircle className="h-4 w-4 mr-2" />
-                New Invoice
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center space-y-4 mb-12">
