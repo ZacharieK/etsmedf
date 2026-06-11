@@ -11,8 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/contexts/AuthContext"
 
 const schema = z.object({
-  email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.string().email("Adresse e-mail invalide"),
+  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
 })
 
 type FormData = z.infer<typeof schema>
@@ -41,7 +41,6 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
         <FileText className="h-7 w-7 text-primary" />
         <span className="font-bold text-2xl tracking-tight">ETSMEDF</span>
@@ -49,18 +48,18 @@ export function LoginPage() {
 
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
+          <CardTitle className="text-xl">Bon retour</CardTitle>
+          <CardDescription>Connectez-vous à votre compte</CardDescription>
         </CardHeader>
 
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="vous@exemple.com"
                 autoComplete="email"
                 {...register("email")}
               />
@@ -70,7 +69,7 @@ export function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Mot de passe</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -102,10 +101,10 @@ export function LoginPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Signing in…
+                  Connexion en cours…
                 </>
               ) : (
-                "Sign in"
+                "Se connecter"
               )}
             </Button>
           </form>
@@ -113,7 +112,7 @@ export function LoginPage() {
       </Card>
 
       <p className="text-xs text-muted-foreground mt-6">
-        ETSMEDF Invoice Manager
+        ETSMEDF — Gestionnaire de factures
       </p>
     </div>
   )
@@ -122,15 +121,19 @@ export function LoginPage() {
 function getFirebaseMessage(err: unknown): string {
   if (err && typeof err === "object" && "code" in err) {
     const code = (err as { code: string }).code
-    if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-      return "Invalid email or password."
+    if (
+      code === "auth/invalid-credential" ||
+      code === "auth/wrong-password" ||
+      code === "auth/user-not-found"
+    ) {
+      return "E-mail ou mot de passe incorrect."
     }
     if (code === "auth/too-many-requests") {
-      return "Too many attempts. Please try again later."
+      return "Trop de tentatives. Veuillez réessayer plus tard."
     }
     if (code === "auth/user-disabled") {
-      return "This account has been disabled."
+      return "Ce compte a été désactivé."
     }
   }
-  return "An error occurred. Please try again."
+  return "Une erreur est survenue. Veuillez réessayer."
 }

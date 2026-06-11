@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   type User,
 } from "firebase/auth"
+import { getFunctions, httpsCallable } from "firebase/functions"
 import { auth } from "@/lib/firebase"
 
 interface AuthContextValue {
@@ -15,6 +16,12 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+
+function callDGI(name: "dgiLogin" | "dgiLogout") {
+  httpsCallable(getFunctions(), name)({}).catch((err) =>
+    console.warn(`DGI ${name} failed (non-blocking):`, err?.message)
+  )
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -30,9 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string) {
     await signInWithEmailAndPassword(auth, email, password)
+    // Fire-and-forget: log in to DGI in the background
+    callDGI("dgiLogin")
   }
 
   async function signOut() {
+    // Fire-and-forget: log out from DGI before clearing Firebase session
+    callDGI("dgiLogout")
     await firebaseSignOut(auth)
   }
 

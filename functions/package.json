@@ -1,0 +1,33 @@
+{
+  "name": "etsmedf-functions",
+  "private": true,
+  "version": "0.0.1",
+  "type": "commonjs",
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^133.0.0",
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.3.2",
+    "puppeteer-core": "^24.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^20.0.0",
+    "eslint": "^9.39.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.61.0"
+  }
+}

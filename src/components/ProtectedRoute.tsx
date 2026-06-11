@@ -10,7 +10,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground gap-2">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Loading…
+        Chargement…
       </div>
     )
   }

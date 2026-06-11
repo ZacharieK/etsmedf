@@ -15,9 +15,9 @@ export function NewInvoicePage() {
     try {
       const id = await createInvoice.mutateAsync(invoice)
       setGeneratedInvoice((prev) => (prev ? { ...prev, id } : prev))
-      toast.success("Invoice saved to Firestore")
+      toast.success("Facture enregistrée dans Firestore")
     } catch {
-      toast.error("Failed to save invoice — check your Firebase config")
+      toast.error("Échec de l'enregistrement — vérifiez votre configuration Firebase")
     }
   }
 
@@ -26,7 +26,7 @@ export function NewInvoicePage() {
       <AppHeader
         breadcrumb="Invoices"
         breadcrumbHref="/invoices"
-        current={generatedInvoice ? "Preview" : "New Invoice"}
+        current={generatedInvoice ? "Aperçu" : "Nouvelle facture"}
       />
 
       <main className="max-w-5xl mx-auto px-4 py-8">

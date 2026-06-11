@@ -5,6 +5,8 @@ import { LoginPage } from "@/pages/LoginPage"
 import { HomePage } from "@/pages/HomePage"
 import { NewInvoicePage } from "@/pages/NewInvoicePage"
 import { InvoicesListPage } from "@/pages/InvoicesListPage"
+import { DGIArticlesPage } from "@/pages/DGIArticlesPage"
+import { PointDeVentePage } from "@/pages/PointDeVentePage"
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -51,7 +53,34 @@ const newInvoiceRoute = createRoute({
   ),
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, homeRoute, invoicesRoute, newInvoiceRoute])
+const dgiArticlesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/dgi/articles",
+  component: () => (
+    <ProtectedRoute>
+      <DGIArticlesPage />
+    </ProtectedRoute>
+  ),
+})
+
+const pointDeVenteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/dgi/points-de-vente",
+  component: () => (
+    <ProtectedRoute>
+      <PointDeVentePage />
+    </ProtectedRoute>
+  ),
+})
+
+const routeTree = rootRoute.addChildren([
+  loginRoute,
+  homeRoute,
+  invoicesRoute,
+  newInvoiceRoute,
+  dgiArticlesRoute,
+  pointDeVenteRoute,
+])
 
 export const router = createRouter({ routeTree })
 
