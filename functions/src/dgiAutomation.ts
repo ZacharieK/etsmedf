@@ -96,26 +96,76 @@ export async function launchBrowser(): Promise<Browser> {
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 
 async function findByText(page: Page, text: string) {
-  const handles = await page.$$("button, a, [role='button'], input[type='submit']")
-  for (const h of handles) {
-    const t = await h.evaluate((el) => el.textContent?.trim() ?? "")
-    if (t.toUpperCase().includes(text.toUpperCase())) return h
+  // Try standard interactive elements first, then broader nav/list elements
+  const selectors = [
+    "button, a, [role='button'], input[type='submit']",
+    "li, [onclick], [class*='menu'], [class*='nav'], [class*='item'], [class*='link']",
+  ]
+  for (const sel of selectors) {
+    const handles = await page.$$(sel)
+    for (const h of handles) {
+      const t = await h.evaluate((el) => (el as HTMLElement).innerText?.trim() ?? el.textContent?.trim() ?? "")
+      if (t.toUpperCase().includes(text.toUpperCase())) return h
+    }
   }
   return null
 }
 
-async function clickText(page: Page, text: string, timeoutMs = 15000) {
+async function clickText(page: Page, text: string, timeoutMs = 20000) {
+  // Wait for the text to be visually rendered (innerText, not just raw textContent)
+  // This ensures the page has finished rendering before we try to click.
+  // Falls back to textContent if innerText never shows it (e.g. hidden nav templates).
   await page.waitForFunction(
     (t) => {
-      const els = document.querySelectorAll("button, a, [role='button'], input[type='submit']")
-      return Array.from(els).some((el) => el.textContent?.toUpperCase().includes(t.toUpperCase()))
+      const visible = (document.body.innerText ?? "").toUpperCase().includes(t.toUpperCase())
+      const raw = (document.body.textContent ?? "").toUpperCase().includes(t.toUpperCase())
+      return visible || raw
     },
     { timeout: timeoutMs },
     text
   )
+
+  // Give the page a moment to finish any CSS transitions / animations
+  await new Promise((r) => setTimeout(r, 600))
+
+  // Try Puppeteer element handle click first; catch if element has no layout box
   const el = await findByText(page, text)
-  if (!el) throw new Error(`Button "${text}" not found`)
-  await el.click()
+  if (el) {
+    try {
+      await el.click()
+      await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
+      return
+    } catch (err) {
+      logger.warn("DGI: Puppeteer click failed, falling back to JS click", {
+        text,
+        reason: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // JS fallback: dispatch click event directly (works on hidden elements too)
+  const clicked = await page.evaluate((t) => {
+    const all = Array.from(document.querySelectorAll("*"))
+    // Prefer visible elements first
+    let target = all.find(
+      (e) =>
+        (e as HTMLElement).innerText?.trim().toUpperCase().includes(t.toUpperCase()) &&
+        (e as HTMLElement).offsetParent !== null
+    )
+    // If nothing visible, try any element with matching textContent (e.g. hidden nav)
+    if (!target) {
+      target = all.find((e) =>
+        e.textContent?.trim().toUpperCase().includes(t.toUpperCase())
+      )
+    }
+    if (target) {
+      ;(target as HTMLElement).click()
+      return true
+    }
+    return false
+  }, text)
+
+  logger.info("DGI: JS click result", { text, clicked })
   await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
 }
 
@@ -548,7 +598,24 @@ export async function listDGIEUFs(
 async function openEUF(page: Page, eufId: string) {
   logger.info("DGI: opening e-UF", { eufId })
 
-  const clicked = await page.evaluate((id) => {
+  // Intercept all XHR/fetch requests made during the button click
+  // so we can see exactly what API call activates the e-UF
+  const capturedRequests: string[] = []
+  const reqListener = (req: { url: () => string; method: () => string }) => {
+    const url = req.url()
+    if (!url.match(/\.(js|css|png|jpg|gif|svg|ico|woff|woff2|ttf)(\?|$)/)) {
+      capturedRequests.push(`${req.method()} ${url}`)
+    }
+  }
+  page.on("request", reqListener as Parameters<typeof page.on>[1])
+
+  // Set up navigation listener BEFORE the click so we don't miss it
+  const navPromise = page
+    .waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20000 })
+    .catch(() => null)
+
+  // Click "Ouvrir e-UF" for the target eufId
+  const found = await page.evaluate((id) => {
     const all = Array.from(document.querySelectorAll("*"))
     for (const el of all) {
       if (el.textContent?.includes(id) && el.children.length < 10) {
@@ -566,19 +633,41 @@ async function openEUF(page: Page, eufId: string) {
     return false
   }, eufId)
 
-  if (!clicked) {
-    logger.warn("DGI: e-UF not found by ID, clicking first available", { eufId })
-    await clickText(page, "Ouvrir e-UF")
+  if (!found) {
+    logger.warn("DGI: e-UF not found by ID, clicking first Ouvrir e-UF", { eufId })
+    await page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll("button, a")).find(
+        (b) => b.textContent?.toLowerCase().includes("ouvrir")
+      )
+      if (btn) (btn as HTMLElement).click()
+    })
   }
 
-  await page.waitForFunction(
-    () =>
-      document.body.textContent?.toUpperCase().includes("EMETTRE") ||
-      document.body.textContent?.toUpperCase().includes("GESTION DES ARTICLES"),
-    { timeout: 15000 }
-  )
+  // Wait for navigation to complete
+  await navPromise
+  const urlAfterNav = page.url()
+  logger.info("DGI: navigated after Ouvrir click", { eufId, url: urlAfterNav, captured: capturedRequests })
+  page.off("request", reqListener as Parameters<typeof page.on>[1])
+
+  // Wait for the SPA to fully render (wait for the real navbar text to appear in innerText)
+  try {
+    await page.waitForFunction(
+      () =>
+        (document.body.innerText ?? "").toUpperCase().includes("ACCUEIL") ||
+        (document.body.innerText ?? "").toUpperCase().includes("ARTICLES") ||
+        (document.body.innerText ?? "").toUpperCase().includes("FACTURES"),
+      { timeout: 25000 }
+    )
+  } catch {
+    logger.warn("DGI: SPA render timeout after openEUF, continuing anyway")
+  }
+
   await sleep(800)
-  logger.info("DGI: e-UF opened", { eufId })
+
+  const postOpenText: string = await page.evaluate(
+    () => (document.body?.innerText ?? "").replace(/\s+/g, " ").substring(0, 500)
+  )
+  logger.info("DGI: e-UF page rendered", { eufId, url: page.url(), pagePreview: postOpenText })
 }
 
 // ── Session helper (opens e-UF automatically) ─────────────────────────────────
@@ -609,8 +698,55 @@ async function withArticleManagement<T>(
   fn: (page: Page) => Promise<T>
 ): Promise<T> {
   return withEUFSession(db, username, password, async (page) => {
-    await clickText(page, "GESTION DES ARTICLES")
-    await sleep(1200)
+    // After opening the e-UF, wait for the SPA to fully bootstrap its event handlers.
+    // The text may appear quickly, but Angular/framework click handlers take longer.
+    logger.info("DGI: waiting for SPA to fully render before clicking ARTICLES", { url: page.url() })
+    await sleep(3000)
+    await page.waitForNetworkIdle({ idleTime: 1000, timeout: 10000 }).catch(() => {})
+    await sleep(1000)
+
+    const priorUrl = page.url()
+    // Log nav items for debugging (broaden to all elements since DGI uses custom divs/spans)
+    const navItems: string[] = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("*"))
+        .map((el) => (el as HTMLElement).innerText?.trim())
+        .filter((t) => t && t.length > 0 && t.length < 40 && t.toUpperCase() === t)
+        .filter((t, i, arr) => arr.indexOf(t) === i)
+        .slice(0, 25)
+    )
+    logger.info("DGI: nav items visible before ARTICLES click", { url: priorUrl, navItems })
+
+    // Navigate to articles page — use direct URL since Angular router click is unreliable.
+    // From logs, the articles page is at /esfe/pos/items
+    const baseUrl = page.url().replace(/\/pos(\/.*)?$/, "/pos")
+    const articlesUrl = `${baseUrl}/items`
+    logger.info("DGI: navigating directly to articles page", { articlesUrl })
+    await page.goto(articlesUrl, { waitUntil: "domcontentloaded", timeout: 15000 })
+    await sleep(3000)
+    await page.waitForNetworkIdle({ idleTime: 1000, timeout: 10000 }).catch(() => {})
+
+    // Verify we're on the articles page
+    const postNavUrl = page.url()
+    const pageHasArticles = await page.evaluate(() =>
+      (document.body.innerText ?? "").includes("Désignation") ||
+      (document.body.innerText ?? "").includes("PROGRAMMER UN ARTICLE")
+    )
+    logger.info("DGI: articles page navigation result", { url: postNavUrl, pageHasArticles })
+
+    // Fallback: if direct nav didn't work, try clicking ARTICLES in the navbar
+    if (!pageHasArticles) {
+      logger.info("DGI: direct URL didn't load articles, trying clickText fallback")
+      await page.goto(`${baseUrl}`, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {})
+      await sleep(2000)
+      await clickText(page, "ARTICLES", 15000)
+      await sleep(3000)
+    }
+
+    const finalUrl = page.url()
+    const articlesPageText: string = await page.evaluate(
+      () => (document.body?.innerText ?? "").replace(/\s+/g, " ").substring(0, 500)
+    )
+    logger.info("DGI: ARTICLES page loaded", { url: finalUrl, preview: articlesPageText })
     return fn(page)
   })
 }
@@ -620,26 +756,116 @@ async function withArticleManagement<T>(
 async function scrapeArticleList(page: Page): Promise<DGIArticle[]> {
   return page.evaluate(() => {
     const articles: { name: string; price: number; group: string }[] = []
-    const rows = document.querySelectorAll("tr")
 
+    // Strategy 1: Standard HTML table with <tr>/<td>
+    const rows = document.querySelectorAll("tr")
     rows.forEach((row) => {
       const cells = Array.from(row.querySelectorAll("td"))
       if (cells.length < 2) return
       const name = cells[0]?.textContent?.trim() ?? ""
-      if (!name || /^(Code|Désignation|N°|#|Libellé)/i.test(name)) return
+      if (!name || /^(Code|D\u00e9signation|N\u00b0|#|Libell\u00e9)/i.test(name)) return
       const rawPrice = cells[1]?.textContent?.replace(/[^0-9.,]/g, "").replace(",", ".") ?? "0"
       const price = parseFloat(rawPrice) || 0
       const group = cells[2]?.textContent?.trim() || "B"
       articles.push({ name, price, group })
     })
 
-    if (articles.length === 0) {
-      document
-        .querySelectorAll("[class*='article'], [class*='designation'], [class*='libelle']")
-        .forEach((el) => {
-          const name = el.textContent?.trim()
-          if (name && name.length > 0) articles.push({ name, price: 0, group: "B" })
-        })
+    if (articles.length > 0) return articles
+
+    // Strategy 2: Angular Material table (mat-row/mat-cell) or cdk-table
+    const matRows = document.querySelectorAll("mat-row, [class*='mat-row'], [class*='cdk-row'], [role='row']")
+    matRows.forEach((row) => {
+      const cells = Array.from(row.querySelectorAll("mat-cell, [class*='mat-cell'], [class*='cdk-cell'], [role='cell'], [role='gridcell']"))
+      if (cells.length < 2) return
+      const name = cells[0]?.textContent?.trim() ?? ""
+      if (!name || /^(Code|D\u00e9signation|N\u00b0|#|Libell\u00e9)/i.test(name)) return
+      const rawPrice = cells.find(c => /[\d\s]+[.,]\d{2}/.test(c.textContent ?? ""))?.textContent ?? ""
+      const price = parseFloat(rawPrice.replace(/[^0-9.,]/g, "").replace(/\s/g, "").replace(",", ".")) || 0
+      const groupCell = cells.find(c => /^[A-Z]$/.test(c.textContent?.trim() ?? ""))
+      const group = groupCell?.textContent?.trim() || "B"
+      articles.push({ name, price, group })
+    })
+
+    if (articles.length > 0) return articles
+
+    // Strategy 3: Parse row-like div containers (DGI uses custom grid/flex rows)
+    // Look for repeated sibling elements that form a table pattern
+    const allElements = Array.from(document.querySelectorAll("*"))
+    // Find elements that look like data rows: contain a price pattern like "1 234,56" or "1234,56"
+    const pricePattern = /\d[\d\s]*[.,]\d{2}/
+    const rowCandidates = allElements.filter(el => {
+      const text = (el as HTMLElement).innerText?.trim() ?? ""
+      // Must contain a price, be visible, and not be the whole page
+      return pricePattern.test(text) &&
+        text.length > 5 && text.length < 300 &&
+        (el as HTMLElement).offsetParent !== null &&
+        el.children.length >= 2
+    })
+
+    // Group by parent to find repeated row patterns
+    const parentMap = new Map<Element, Element[]>()
+    for (const el of rowCandidates) {
+      const parent = el.parentElement
+      if (!parent) continue
+      if (!parentMap.has(parent)) parentMap.set(parent, [])
+      parentMap.get(parent)!.push(el)
+    }
+
+    // Find the parent with the most children (likely the table body)
+    let bestParent: Element | null = null
+    let bestCount = 0
+    for (const [parent, children] of parentMap) {
+      if (children.length > bestCount) {
+        bestCount = children.length
+        bestParent = parent
+      }
+    }
+
+    if (bestParent && bestCount >= 2) {
+      const dataRows = parentMap.get(bestParent)!
+      for (const row of dataRows) {
+        const cells = Array.from(row.children)
+        if (cells.length < 2) continue
+        const name = cells[0]?.textContent?.trim() ?? ""
+        if (!name || /^(Code|D\u00e9signation|N\u00b0|#|Libell\u00e9)/i.test(name)) continue
+        // Find the first cell with a price pattern
+        let price = 0
+        for (const cell of cells) {
+          const text = cell.textContent?.trim() ?? ""
+          const match = text.match(/([\d\s]+[.,]\d{2})/)
+          if (match) {
+            price = parseFloat(match[1].replace(/\s/g, "").replace(",", ".")) || 0
+            break
+          }
+        }
+        // Find group (single uppercase letter cell)
+        let group = "B"
+        for (const cell of cells) {
+          const text = cell.textContent?.trim() ?? ""
+          if (/^[A-Z]$/.test(text)) { group = text; break }
+        }
+        if (name.length > 0) articles.push({ name, price, group })
+      }
+    }
+
+    if (articles.length > 0) return articles
+
+    // Strategy 4: Last resort — parse innerText line-by-line for tabular data
+    // DGI page format: "Name GROUP TYPE Price Price Mode Tax Actions"
+    const bodyText = (document.body?.innerText ?? "")
+    const lines = bodyText.split("\n").map(l => l.trim()).filter(l => l.length > 0)
+    const priceLineRe = /^(.+?)\s+([A-Z])\s+(BIE|SER|AUT)\s+([\d\s]+[.,]\d{2})/
+    for (const line of lines) {
+      const match = line.match(priceLineRe)
+      if (match) {
+        const name = match[1].trim()
+        const group = match[2]
+        const priceStr = match[4].replace(/\s/g, "").replace(",", ".")
+        const price = parseFloat(priceStr) || 0
+        if (name && !/^(Code|D\u00e9signation|N\u00b0|#|Libell\u00e9)/i.test(name)) {
+          articles.push({ name, price, group })
+        }
+      }
     }
 
     return articles
@@ -647,7 +873,7 @@ async function scrapeArticleList(page: Page): Promise<DGIArticle[]> {
 }
 
 async function getExistingArticleNames(page: Page): Promise<string[]> {
-  await clickText(page, "GESTION DES ARTICLES")
+  await clickText(page, "ARTICLES")
   await sleep(1200)
   const articles = await scrapeArticleList(page)
   return articles.map((a) => a.name)
@@ -849,9 +1075,88 @@ export async function listDGIArticles(
   db: admin.firestore.Firestore
 ): Promise<DGIArticle[]> {
   return withArticleManagement(db, username, password, async (page) => {
-    const articles = await scrapeArticleList(page)
-    logger.info("DGI: article list fetched", { count: articles.length })
-    return articles
+    // Debug: log DOM structure to understand what elements are used for the table
+    const domDebug: { trCount: number; matRowCount: number; roleRowCount: number; childDivStructure: string[] } = await page.evaluate(() => {
+      const trCount = document.querySelectorAll("tr").length
+      const matRowCount = document.querySelectorAll("mat-row, [class*='mat-row'], [class*='cdk-row']").length
+      const roleRowCount = document.querySelectorAll("[role='row']").length
+      // Find repeating div structures that look like table rows
+      const allWithPrice = Array.from(document.querySelectorAll("*")).filter(el => {
+        const text = (el as HTMLElement).innerText?.trim() ?? ""
+        return /\d[\d\s]*[.,]\d{2}/.test(text) && text.length > 5 && text.length < 300 && el.children.length >= 2
+      })
+      const childDivStructure = allWithPrice.slice(0, 3).map(el =>
+        `<${el.tagName.toLowerCase()} class="${el.className}"> children=${el.children.length} text="${(el as HTMLElement).innerText?.trim().substring(0, 80)}"`
+      )
+      return { trCount, matRowCount, roleRowCount, childDivStructure }
+    })
+    logger.info("DGI: articles DOM structure", domDebug)
+
+    // Scrape all pages (DGI paginates articles, ~10 per page)
+    const allArticles: DGIArticle[] = []
+    let pageNum = 1
+    const MAX_PAGES = 10 // safety limit
+
+    while (pageNum <= MAX_PAGES) {
+      const pageArticles = await scrapeArticleList(page)
+      logger.info(`DGI: scraped page ${pageNum}`, { count: pageArticles.length })
+      allArticles.push(...pageArticles)
+
+      // Try to click the "Next page" button (Angular Material paginator)
+      const hasNextPage = await page.evaluate(() => {
+        // Angular Material paginator next button
+        const nextBtn =
+          document.querySelector("button.mat-paginator-navigation-next:not([disabled])") ??
+          document.querySelector("button[aria-label*='Next']:not([disabled])") ??
+          document.querySelector("button[aria-label*='next']:not([disabled])") ??
+          document.querySelector("button[aria-label*='Suivant']:not([disabled])") ??
+          document.querySelector("button[aria-label*='suivant']:not([disabled])")
+        if (nextBtn && !(nextBtn as HTMLButtonElement).disabled) {
+          ;(nextBtn as HTMLElement).click()
+          return true
+        }
+        // Fallback: look for a ">" or chevron_right button near pagination controls
+        const paginatorBtns = Array.from(document.querySelectorAll(
+          "mat-paginator button, [class*='paginator'] button, [class*='pagination'] button"
+        ))
+        const rightBtn = paginatorBtns.find(b => {
+          const text = b.textContent?.trim() ?? ""
+          const label = b.getAttribute("aria-label") ?? ""
+          return (text.includes("chevron_right") || text.includes(">") || text.includes("\u203A") ||
+            label.toLowerCase().includes("next") || label.toLowerCase().includes("suivant")) &&
+            !(b as HTMLButtonElement).disabled
+        })
+        if (rightBtn) {
+          ;(rightBtn as HTMLElement).click()
+          return true
+        }
+        return false
+      })
+
+      if (!hasNextPage) {
+        logger.info("DGI: no more pages (next button disabled or not found)")
+        break
+      }
+
+      // Wait for the next page to load
+      await sleep(2000)
+      await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
+      pageNum++
+    }
+
+    logger.info("DGI: total articles fetched across all pages", { total: allArticles.length, pages: pageNum })
+
+    if (allArticles.length > 0) {
+      const eufId = await getSelectedEUFId(db)
+      const toSave = allArticles.map(({ name, price }) => ({ name, price }))
+      await db.doc(`dgi_articles/${eufId}`).set({
+        items: toSave,
+        updatedAt: new Date().toISOString(),
+      })
+      logger.info("DGI: articles saved to Firestore", { eufId, count: toSave.length })
+    }
+
+    return allArticles
   })
 }
 

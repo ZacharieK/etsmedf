@@ -1,11 +1,45 @@
+import { useEffect, useState } from "react"
+import { doc, onSnapshot } from "firebase/firestore"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { getFunctions, httpsCallable } from "firebase/functions"
+import { db } from "@/lib/firebase"
+import { useDGIConfig } from "./useDGIConfig"
 
 export interface DGIArticle {
   name: string
   price: number
-  group: string
+  group?: string
 }
+
+// ── Firestore live articles (reads dgi_articles/{selectedEUFId}) ──────────────
+
+export function useStoredDGIArticles(): { articles: DGIArticle[]; loading: boolean } {
+  const { selectedEUFId } = useDGIConfig()
+  const [articles, setArticles] = useState<DGIArticle[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!selectedEUFId) {
+      setArticles([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const unsub = onSnapshot(
+      doc(db, "dgi_articles", selectedEUFId),
+      (snap) => {
+        setArticles(snap.exists() ? ((snap.data().items as DGIArticle[]) ?? []) : [])
+        setLoading(false)
+      },
+      () => { setArticles([]); setLoading(false) }
+    )
+    return unsub
+  }, [selectedEUFId])
+
+  return { articles, loading }
+}
+
+// ── Cloud Function hooks (CRUD on DGI platform) ───────────────────────────────
 
 const KEY = ["dgi-articles"] as const
 

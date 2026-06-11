@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { useProductMap } from "@/hooks/useProducts"
+import { useStoredDGIArticles } from "@/hooks/useDGIArticles"
 import type { Invoice, InvoiceItem } from "@/types/invoice"
 import { calculateSubtotal, calculateTVA, calculateTotal, TVA_RATE } from "@/types/invoice"
 
@@ -50,8 +50,8 @@ function newItem(): InvoiceItem {
 
 export function InvoiceForm({ onGenerate }: Props) {
   const [invoiceNumber] = useState(generateInvoiceNumber)
-  const productMap = useProductMap()
-  const [productIdInputs, setProductIdInputs] = useState<Record<number, string>>({})
+  const { articles: dgiArticles } = useStoredDGIArticles()
+  const [articleIdInputs, setArticleIdInputs] = useState<Record<number, string>>({})
 
   const today = new Date().toISOString().split("T")[0]
   const dueDefault = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
@@ -88,22 +88,22 @@ export function InvoiceForm({ onGenerate }: Props) {
   const tva = calculateTVA(normalizedItems)
   const total = calculateTotal(normalizedItems)
 
-  function handleProductIdChange(index: number, raw: string) {
-    setProductIdInputs((prev) => ({ ...prev, [index]: raw }))
+  function handleArticleIdChange(index: number, raw: string) {
+    setArticleIdInputs((prev) => ({ ...prev, [index]: raw }))
     const numId = parseInt(raw, 10)
-    if (!isNaN(numId) && productMap.has(numId)) {
-      const product = productMap.get(numId)!
-      setValue(`items.${index}.productId`, product.id, { shouldValidate: true })
-      setValue(`items.${index}.description`, product.name, { shouldValidate: true })
-      setValue(`items.${index}.unitPrice`, product.price, { shouldValidate: true })
+    if (!isNaN(numId) && numId >= 1 && numId <= dgiArticles.length) {
+      const article = dgiArticles[numId - 1]
+      setValue(`items.${index}.productId`, numId, { shouldValidate: true })
+      setValue(`items.${index}.description`, article.name, { shouldValidate: true })
+      setValue(`items.${index}.unitPrice`, article.price, { shouldValidate: true })
     }
   }
 
-  function getProductStatus(index: number): "found" | "not-found" | "empty" {
-    const raw = productIdInputs[index] ?? ""
+  function getArticleStatus(index: number): "found" | "not-found" | "empty" {
+    const raw = articleIdInputs[index] ?? ""
     if (!raw) return "empty"
     const numId = parseInt(raw, 10)
-    return productMap.has(numId) ? "found" : "not-found"
+    return (!isNaN(numId) && numId >= 1 && numId <= dgiArticles.length) ? "found" : "not-found"
   }
 
   function onSubmit(data: InvoiceFormData) {
@@ -202,27 +202,27 @@ export function InvoiceForm({ onGenerate }: Props) {
             <span className="text-right">Prix unitaire</span>
             <span />
           </div>
-
+        
           {fields.map((field, index) => {
             const qty = Number(watchedItems[index]?.quantity) || 0
             const price = Number(watchedItems[index]?.unitPrice) || 0
             const lineTotal = qty * price
-            const status = getProductStatus(index)
-
+            const status = getArticleStatus(index)
+        
             return (
               <div
                 key={field.id}
                 className="grid grid-cols-1 md:grid-cols-[72px_1fr_80px_130px_40px] gap-2 items-start"
               >
-                {/* ID produit */}
+                {/* ID article */}
                 <div className="space-y-1">
                   <Label className="md:hidden text-xs">ID article</Label>
                   <div className="relative">
                     <Input
                       placeholder="ID"
                       className="pr-7"
-                      value={productIdInputs[index] ?? ""}
-                      onChange={(e) => handleProductIdChange(index, e.target.value)}
+                      value={articleIdInputs[index] ?? ""}
+                      onChange={(e) => handleArticleIdChange(index, e.target.value)}
                     />
                     {status === "found" && (
                       <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-green-500" />
@@ -235,7 +235,7 @@ export function InvoiceForm({ onGenerate }: Props) {
                     <p className="text-xs text-destructive">Introuvable</p>
                   )}
                 </div>
-
+        
                 {/* Description */}
                 <div className="space-y-1">
                   <Label className="md:hidden text-xs">Description</Label>

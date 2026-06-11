@@ -9,14 +9,18 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import {
   useDGIArticles,
+  useStoredDGIArticles,
   useDGIAddArticle,
   useDGIDeleteArticle,
   useDGIUpdateArticle,
   type DGIArticle,
 } from "@/hooks/useDGIArticles"
+import { useDGIConfig } from "@/hooks/useDGIConfig"
 
 export function DGIArticlesPage() {
-  const articlesQuery = useDGIArticles()
+  const { selectedEUFId } = useDGIConfig()
+  const { articles: storedArticles, loading: storedLoading } = useStoredDGIArticles()
+  const fetchFromDGI = useDGIArticles()
   const addArticle = useDGIAddArticle()
   const deleteArticle = useDGIDeleteArticle()
   const updateArticle = useDGIUpdateArticle()
@@ -37,16 +41,17 @@ export function DGIArticlesPage() {
   // Busy state per article (for individual row loaders)
   const [busyArticle, setBusyArticle] = useState<string | null>(null)
 
-  const articles = articlesQuery.data ?? []
-  const isLoading = articlesQuery.isFetching
+  // Display comes from Firestore (live); Cloud Function only used for fetch/CRUD
+  const articles = storedArticles
+  const isLoading = storedLoading || fetchFromDGI.isFetching
   const isMutating =
     addArticle.isPending || deleteArticle.isPending || updateArticle.isPending
 
   async function handleLoad() {
-    const promise = articlesQuery.refetch()
+    const promise = fetchFromDGI.refetch()
     toast.promise(promise, {
-      loading: "Chargement des articles DGI…",
-      success: (res) => `${res.data?.length ?? 0} articles chargés`,
+      loading: "Connexion à la plateforme DGI…",
+      success: (res) => `${res.data?.length ?? 0} articles sauvegardés dans Firestore`,
       error: (e) => `Erreur : ${extractMessage(e)}`,
     })
   }
@@ -66,7 +71,7 @@ export function DGIArticlesPage() {
         setAddName("")
         setAddPrice("")
         setShowAdd(false)
-        articlesQuery.refetch()
+        fetchFromDGI.refetch()
         return `Article "${addName}" ajouté`
       },
       error: (e) => `Échec : ${extractMessage(e)}`,
@@ -102,7 +107,7 @@ export function DGIArticlesPage() {
       loading: `Modification de "${originalName}"…`,
       success: () => {
         setEditingName(null)
-        articlesQuery.refetch()
+        fetchFromDGI.refetch()
         return `Article modifié`
       },
       error: (e) => `Échec : ${extractMessage(e)}`,
@@ -124,7 +129,7 @@ export function DGIArticlesPage() {
       loading: `Suppression de "${name}"…`,
       success: () => {
         setConfirmDelete(null)
-        articlesQuery.refetch()
+        fetchFromDGI.refetch()
         return `Article "${name}" supprimé`
       },
       error: (e) => `Échec : ${extractMessage(e)}`,
@@ -158,7 +163,7 @@ export function DGIArticlesPage() {
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {articlesQuery.isFetched ? "Rafraîchir" : "Charger les articles"}
+              {fetchFromDGI.isFetched || articles.length > 0 ? "Rafraîchir depuis DGI" : "Charger les articles"}
             </Button>
             <Button
               size="sm"
@@ -232,14 +237,24 @@ export function DGIArticlesPage() {
           </Card>
         )}
 
-        {/* Notice: not yet loaded */}
-        {!articlesQuery.isFetched && !isLoading && (
+        {/* No EUF selected */}
+        {!selectedEUFId && !isLoading && (
+          <Card>
+            <CardContent className="py-14 text-center text-muted-foreground space-y-2">
+              <p className="font-medium">Aucun point de vente sélectionné.</p>
+              <p className="text-sm">Sélectionnez un e-DEF dans la barre de navigation.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Empty + no DGI fetch yet */}
+        {selectedEUFId && articles.length === 0 && !isLoading && (
           <Card>
             <CardContent className="py-14 text-center text-muted-foreground space-y-3">
-              <p className="font-medium">Les articles ne sont pas encore chargés.</p>
+              <p className="font-medium">Aucun article enregistré pour ce point de vente.</p>
               <p className="text-sm">
                 Cliquez sur <strong>Charger les articles</strong> pour récupérer la liste
-                depuis la plateforme DGI.
+                depuis la plateforme DGI et la sauvegarder.
               </p>
               <p className="text-xs">Durée estimée : 30–60 secondes.</p>
             </CardContent>
@@ -250,24 +265,24 @@ export function DGIArticlesPage() {
         {isLoading && (
           <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            Connexion à la plateforme DGI…
+            {fetchFromDGI.isFetching ? "Connexion à la plateforme DGI…" : "Chargement…"}
           </div>
         )}
 
-        {/* Error */}
-        {articlesQuery.isError && !isLoading && (
+        {/* Error from Cloud Function */}
+        {fetchFromDGI.isError && !isLoading && (
           <Card>
             <CardContent className="py-10 text-center text-destructive">
-              <p className="font-medium">Erreur lors du chargement</p>
+              <p className="font-medium">Erreur lors du chargement depuis DGI</p>
               <p className="text-sm mt-1 text-muted-foreground">
-                {extractMessage(articlesQuery.error)}
+                {extractMessage(fetchFromDGI.error)}
               </p>
             </CardContent>
           </Card>
         )}
 
         {/* Articles table */}
-        {articlesQuery.isFetched && !isLoading && !articlesQuery.isError && (
+        {selectedEUFId && articles.length > 0 && !isLoading && (
           <div className="space-y-2">
             {/* Header */}
             <div className="hidden md:grid md:grid-cols-[1fr_130px_80px_100px] gap-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wide">
