@@ -1,0 +1,3 @@
+- Custom hooks (e.g., `useAuth`) enforce context usage by throwing errors if called outside their provider.
+- Asynchronous side-effects to external systems (DGI) are implemented as non-blocking 'fire-and-forget' calls to prevent UI delays.
+- Form inputs use `react-hook-form` with `zod` resolvers for type-safe schema validation and error handling.

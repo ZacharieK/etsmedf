@@ -1,0 +1,1 @@
+React 18 with TanStack Router for type-safe routing, TanStack Query for server-state management, and Firebase SDK for authentication, Firestore, and Cloud Functions integration.

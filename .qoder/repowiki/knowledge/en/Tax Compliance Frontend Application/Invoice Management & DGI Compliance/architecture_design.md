@@ -1,0 +1,4 @@
+- **Data Layer**: `src/types/invoice.ts` defines shared TypeScript interfaces (`Invoice`, `InvoiceItem`) and pure calculation utilities (subtotal, TVA, total) used across the module.
+- **Service Layer**: `src/lib/invoiceService.ts` encapsulates direct Firestore interactions (CRUD) for the 'invoices' collection, handling timestamp serialization.
+- **State Management**: `src/hooks/useInvoices.ts` leverages `@tanstack/react-query` to manage server state, providing typed hooks for queries and mutations, including a specialized mutation for calling the 'submitToDGI' Firebase Cloud Function.
+- **Presentation Layer**: Pages (`InvoicesListPage`, `NewInvoicePage`) orchestrate high-level layout and navigation, while components (`InvoiceForm`, `InvoicePreview`) handle complex UI logic. `InvoiceForm` uses `react-hook-form` with Zod validation, and `InvoicePreview` supports dual-view rendering (internal app view vs. DGI PDF iframe).

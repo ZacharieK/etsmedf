@@ -1,0 +1,3 @@
+- Requires Firebase secrets `DGI_USERNAME` and `DGI_PASSWORD` to be configured before deployment.
+- Build and deploy via `npm run build` (tsc) and `npm run deploy` (firebase deploy --only functions).
+- Local testing supported via `npm run serve` which starts Firebase emulators.

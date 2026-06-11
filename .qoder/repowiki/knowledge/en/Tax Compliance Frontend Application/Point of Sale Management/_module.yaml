@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: frontend/pos
+title: Point of Sale Management
+scope:
+    - src/pages/PointDeVentePage.tsx
+    - src/hooks/useProducts.ts
+    - src/lib/productService.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend/invoices

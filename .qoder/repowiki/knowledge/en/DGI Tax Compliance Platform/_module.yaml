@@ -1,0 +1,27 @@
+schema_version: 1
+module_path: ""
+title: DGI Tax Compliance Platform
+scope:
+    - README.md
+    - CLAUDE.md
+    - .gitignore
+    - firebase.json
+    - firestore.rules
+    - components.json
+    - babel.config.js
+    - eslint.config.js
+    - tsconfig.json
+    - tsconfig.app.json
+    - tsconfig.node.json
+    - vite.config.ts
+    - package.json
+    - package-lock.json
+    - index.html
+    - scripts/
+    - .env
+    - .env.example
+    - e-UF_Manuel_utilisation_v1.1.pdf
+    - quin_articles_DGI.xlsx
+source_files: []
+depends_on: []
+related_to: []

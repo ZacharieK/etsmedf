@@ -1,0 +1,1 @@
+Manages user authentication state, login interactions, and route protection using Firebase Auth.

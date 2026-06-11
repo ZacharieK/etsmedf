@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: frontend/auth
+title: Authentication & Session Management
+scope:
+    - src/pages/LoginPage.tsx
+    - src/contexts/AuthContext.tsx
+    - src/components/ProtectedRoute.tsx
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_functions

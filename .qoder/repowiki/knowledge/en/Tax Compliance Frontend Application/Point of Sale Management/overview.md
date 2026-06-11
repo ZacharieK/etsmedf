@@ -1,0 +1,1 @@
+Manages DGI point-of-sale selection and product catalog retrieval for the POS interface.

@@ -1,0 +1,1 @@
+Automates interactions with the DGI e-DEF platform for invoice submission, article management, and session handling using headless browser automation.

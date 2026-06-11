@@ -1,0 +1,1 @@
+Firebase (Hosting, Firestore, Cloud Functions) serves as the unified cloud infrastructure, with Vite managing the frontend build pipeline and Playwright enabling headless browser automation in the backend functions.

@@ -1,0 +1,1 @@
+Uses Radix UI for accessible headless primitives, Tailwind CSS for styling, and class-variance-authority for component variant management.

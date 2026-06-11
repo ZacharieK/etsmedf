@@ -1,0 +1,3 @@
+- Pure utility functions for financial calculations (subtotal, TVA, total) are co-located with their corresponding TypeScript interfaces in the types file to ensure a single source of truth.
+- React Query hooks are exported as modular, reusable functions (e.g., `useInvoices`, `useCreateInvoice`) that encapsulate query keys and mutation logic, keeping components free of direct data-fetching code.
+- Status labels and badge variants are defined as constant record maps outside component bodies to avoid re-creation on every render and to centralize UI state mapping.

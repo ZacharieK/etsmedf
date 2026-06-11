@@ -1,0 +1,1 @@
+Firebase Authentication (Email/Password) with fire-and-forget Cloud Function triggers for external DGI system synchronization.

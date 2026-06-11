@@ -1,0 +1,3 @@
+- Custom hooks encapsulate all Firebase interactions, exposing clean interfaces to components.
+- Toast notifications are used consistently for user feedback on async operations (loading, success, error).
+- Optimistic UI updates are avoided in favor of refetching data after successful mutations to ensure consistency with the DGI platform.

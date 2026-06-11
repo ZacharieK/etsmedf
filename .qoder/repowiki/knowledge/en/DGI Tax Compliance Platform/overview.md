@@ -1,0 +1,1 @@
+Orchestrates a React frontend and Firebase Cloud Functions backend to automate DGI e-DEF tax compliance, unifying data ingestion, UI interaction, and secure state management.

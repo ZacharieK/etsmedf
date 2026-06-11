@@ -1,0 +1,3 @@
+- Centralized state management via React Context (`AuthContext.tsx`) wrapping Firebase Auth listeners.
+- Declarative route protection using a `ProtectedRoute` component that redirects unauthenticated users.
+- Presentation layer (`LoginPage.tsx`) handles form validation and error mapping, delegating auth logic to the context.

@@ -1,0 +1,4 @@
+- All UI primitives export their root component and any associated variant helpers or sub-components (e.g., Card exports Card, CardHeader, CardTitle).
+- Components use the `cn` utility to merge default Tailwind classes with user-provided `className` props for flexible styling.
+- Radix UI primitives are wrapped in React components that apply default Tailwind classes while preserving all original primitive props via spread operators.
+- Data attributes (e.g., `data-slot`, `data-variant`) are used for targeting specific elements in tests or custom styles without relying on class names.

@@ -113,8 +113,6 @@ async function findByText(page: Page, text: string) {
 
 async function clickText(page: Page, text: string, timeoutMs = 20000) {
   // Wait for the text to be visually rendered (innerText, not just raw textContent)
-  // This ensures the page has finished rendering before we try to click.
-  // Falls back to textContent if innerText never shows it (e.g. hidden nav templates).
   await page.waitForFunction(
     (t) => {
       const visible = (document.body.innerText ?? "").toUpperCase().includes(t.toUpperCase())
@@ -136,30 +134,45 @@ async function clickText(page: Page, text: string, timeoutMs = 20000) {
       await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
       return
     } catch (err) {
-      logger.warn("DGI: Puppeteer click failed, falling back to JS click", {
+      logger.warn("DGI: Puppeteer click failed, trying focus+enter", {
         text,
         reason: err instanceof Error ? err.message : String(err),
       })
+      // Try focus + Enter key (Angular buttons respond to keyboard events)
+      try {
+        await el.focus()
+        await page.keyboard.press("Enter")
+        await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
+        return
+      } catch { /* continue to JS fallback */ }
     }
   }
 
-  // JS fallback: dispatch click event directly (works on hidden elements too)
+  // JS fallback: dispatch full MouseEvent (not just .click()) for Angular compatibility
   const clicked = await page.evaluate((t) => {
     const all = Array.from(document.querySelectorAll("*"))
-    // Prefer visible elements first
-    let target = all.find(
-      (e) =>
-        (e as HTMLElement).innerText?.trim().toUpperCase().includes(t.toUpperCase()) &&
-        (e as HTMLElement).offsetParent !== null
-    )
-    // If nothing visible, try any element with matching textContent (e.g. hidden nav)
+    // Find the smallest (most specific) visible element containing the text
+    let target: Element | undefined = all
+      .filter((e) => {
+        const inner = (e as HTMLElement).innerText?.trim().toUpperCase() ?? ""
+        return inner.includes(t.toUpperCase()) && (e as HTMLElement).offsetParent !== null
+      })
+      .sort((a, b) => (a.innerHTML?.length ?? 0) - (b.innerHTML?.length ?? 0))[0]
+
     if (!target) {
       target = all.find((e) =>
         e.textContent?.trim().toUpperCase().includes(t.toUpperCase())
       )
     }
     if (target) {
-      ;(target as HTMLElement).click()
+      // Dispatch full mouse event sequence (Angular listens to these)
+      const rect = (target as HTMLElement).getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window }
+      target.dispatchEvent(new MouseEvent("mousedown", opts))
+      target.dispatchEvent(new MouseEvent("mouseup", opts))
+      target.dispatchEvent(new MouseEvent("click", opts))
       return true
     }
     return false
@@ -872,59 +885,6 @@ async function scrapeArticleList(page: Page): Promise<DGIArticle[]> {
   })
 }
 
-async function getExistingArticleNames(page: Page): Promise<string[]> {
-  await clickText(page, "ARTICLES")
-  await sleep(1200)
-  const articles = await scrapeArticleList(page)
-  return articles.map((a) => a.name)
-}
-
-async function navigateBackToEUF(page: Page) {
-  const backBtn =
-    (await findByText(page, "Retour")) ??
-    (await findByText(page, "Accueil")) ??
-    (await findByText(page, "Menu"))
-  if (backBtn) {
-    await backBtn.click()
-    await sleep(1000)
-  } else {
-    // Re-open e-UF from DGI home — eufId is not available here, so just navigate back
-    await page.goBack().catch(() => {})
-    await sleep(500)
-  }
-}
-
-// ── Check articles exist (throws if any missing) ───────────────────────────────
-
-async function checkArticlesExist(page: Page, items: DgiInvoiceItem[]): Promise<void> {
-  const existingNames = await getExistingArticleNames(page)
-  logger.info("DGI: checking articles", {
-    existing: existingNames.length,
-    required: items.map((i) => i.description),
-  })
-
-  const existing = existingNames.map((n) => n.toLowerCase().trim())
-  const missing = items.filter(
-    (item) =>
-      !existing.some(
-        (n) =>
-          n === item.description.toLowerCase().trim() ||
-          n.includes(item.description.toLowerCase().trim())
-      )
-  )
-
-  if (missing.length > 0) {
-    const names = missing.map((i) => `"${i.description}"`).join(", ")
-    logger.warn("DGI: missing articles, aborting submission", { missing: names })
-    throw new Error(
-      `Articles manquants dans DGI : ${names}. Ajoutez-les via la gestion des articles avant de soumettre.`
-    )
-  }
-
-  logger.info("DGI: all articles present")
-  await navigateBackToEUF(page)
-}
-
 // ── Article CRUD (page-level) ─────────────────────────────────────────────────
 
 async function addArticleOnPage(page: Page, name: string, price: number): Promise<void> {
@@ -1200,40 +1160,139 @@ export async function updateDGIArticle(
 
 async function buildInvoice(page: Page, invoice: DgiInvoiceInput) {
   logger.info("DGI: building invoice", { clientName: invoice.clientName, itemCount: invoice.items.length })
-  await clickText(page, "EMETTRE UNE FACTURE")
-  await sleep(1000)
 
+  // Step 1: Click "ÉMETTRE UNE FACTURE" using real mouse coordinates.
+  // Angular Zone.js ignores DOM-level programmatic clicks but DOES respond to
+  // CDP Input.dispatchMouseEvent (Puppeteer page.mouse.click) — a real browser click.
+  logger.info("DGI: clicking ÉMETTRE UNE FACTURE via mouse coordinates", { url: page.url() })
+
+  const emitBox = await page.evaluate(() => {
+    const all = Array.from(document.querySelectorAll("*"))
+    // Find the most specific element containing "ÉMETTRE UNE FACTURE"
+    const candidates = all.filter((el) => {
+      const text = (el as HTMLElement).innerText?.trim() ?? ""
+      return text.toUpperCase().includes("METTRE UNE FACTURE") && (el as HTMLElement).offsetParent !== null
+    })
+    // Pick the smallest (most specific) one
+    candidates.sort((a, b) => (a.innerHTML?.length ?? 0) - (b.innerHTML?.length ?? 0))
+    const target = candidates[0]
+    if (!target) return null
+    const rect = target.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, text: (target as HTMLElement).innerText?.trim().substring(0, 40), tag: target.tagName }
+  })
+
+  if (emitBox) {
+    logger.info("DGI: found ÉMETTRE button", { ...emitBox })
+    // Real mouse click via CDP — Angular will respond to this
+    await page.mouse.click(emitBox.x, emitBox.y)
+  } else {
+    logger.warn("DGI: ÉMETTRE UNE FACTURE button not found, trying clickText")
+    await clickText(page, "ÉMETTRE UNE FACTURE")
+  }
+
+  // Wait for Angular to route and render the new page
+  await sleep(5000)
+  await page.waitForNetworkIdle({ idleTime: 500, timeout: 10000 }).catch(() => {})
+
+  // Log page content for debugging
+  const afterEmettrePreview = await page.evaluate(() =>
+    (document.body?.innerText ?? "").replace(/\s+/g, " ").substring(0, 500)
+  )
+  logger.info("DGI: after EMETTRE click", { url: page.url(), preview: afterEmettrePreview })
+
+  // Step 2: Click "facture vente PRIX TTC" (invoice type selection) — also use mouse coordinates
+  const ttcBox = await page.evaluate(() => {
+    const all = Array.from(document.querySelectorAll("*"))
+    const candidates = all.filter((el) => {
+      const text = (el as HTMLElement).innerText?.trim().toLowerCase() ?? ""
+      return text.includes("prix ttc") && (el as HTMLElement).offsetParent !== null
+    })
+    candidates.sort((a, b) => (a.innerHTML?.length ?? 0) - (b.innerHTML?.length ?? 0))
+    const target = candidates[0]
+    if (!target) return null
+    const rect = target.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, text: (target as HTMLElement).innerText?.trim().substring(0, 40), tag: target.tagName }
+  })
+
+  if (ttcBox) {
+    logger.info("DGI: found PRIX TTC element", { ...ttcBox })
+    await page.mouse.click(ttcBox.x, ttcBox.y)
+  } else {
+    logger.warn("DGI: PRIX TTC not found, trying clickText")
+    await clickText(page, "facture vente PRIX TTC")
+  }
+  await sleep(3000)
+  await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
+  logger.info("DGI: clicked facture vente PRIX TTC", { url: page.url() })
+
+  // Step 3: Handle operator setup if needed
   const needsOperator = await page.evaluate(() =>
     document.body.textContent?.toUpperCase().includes("AJOUTER UN OPERATEUR")
   )
   if (needsOperator) {
     logger.info("DGI: adding operator (first time setup)")
-    await clickText(page, "AJOUTER UN OPERATEUR")
+    await mouseClickText(page, "AJOUTER UN OPERATEUR")
     await sleep(800)
     const input = await page.$('input[type="text"]')
     if (input) {
       await input.type("Opérateur")
-      const btn = (await findByText(page, "AJOUTER")) ?? (await findByText(page, "OK"))
-      if (btn) await btn.click()
+      await mouseClickText(page, "AJOUTER")
       await sleep(800)
     }
   }
 
+  // Step 4: Fill client info
   if (invoice.clientName) await fillClientInfo(page, invoice.clientName)
+
+  // Step 5: Click "Articles" tab/section and add items
   await addArticlesToInvoice(page, invoice.items)
 }
 
+/** Click an element by text using real mouse coordinates (CDP-level click). */
+async function mouseClickText(page: Page, text: string, timeoutMs = 20000) {
+  // Wait for text to appear on page
+  await page.waitForFunction(
+    (t) => {
+      const visible = (document.body.innerText ?? "").toUpperCase().includes(t.toUpperCase())
+      const raw = (document.body.textContent ?? "").toUpperCase().includes(t.toUpperCase())
+      return visible || raw
+    },
+    { timeout: timeoutMs },
+    text
+  )
+  await sleep(600)
+
+  const box = await page.evaluate((t) => {
+    const all = Array.from(document.querySelectorAll("*"))
+    const candidates = all.filter((el) => {
+      const inner = (el as HTMLElement).innerText?.trim().toUpperCase() ?? ""
+      return inner.includes(t.toUpperCase()) && (el as HTMLElement).offsetParent !== null
+    })
+    candidates.sort((a, b) => (a.innerHTML?.length ?? 0) - (b.innerHTML?.length ?? 0))
+    const target = candidates[0]
+    if (!target) return null
+    const rect = target.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, text)
+
+  if (box) {
+    await page.mouse.click(box.x, box.y)
+  } else {
+    logger.warn("DGI: mouseClickText could not find element", { text })
+    // Fallback to old clickText
+    await clickText(page, text, timeoutMs)
+  }
+}
+
 async function fillClientInfo(page: Page, clientName: string) {
-  const sectionBtn =
-    (await findByText(page, "1-Informations")) ??
-    (await findByText(page, "Informations générales"))
-  if (!sectionBtn) return
-  await sectionBtn.click()
-  await sleep(600)
-  const modifierBtn = await findByText(page, "MODIFIER")
-  if (!modifierBtn) return
-  await modifierBtn.click()
-  await sleep(600)
+  try {
+    await mouseClickText(page, "1-Informations", 5000)
+  } catch {
+    try { await mouseClickText(page, "Informations générales", 3000) } catch { return }
+  }
+  await sleep(1000)
+  try { await mouseClickText(page, "MODIFIER", 5000) } catch { return }
+  await sleep(1000)
   const nameInput =
     (await page.$('input[placeholder*="nom"]')) ??
     (await page.$('input[placeholder*="client"]')) ??
@@ -1242,56 +1301,104 @@ async function fillClientInfo(page: Page, clientName: string) {
     await nameInput.click({ clickCount: 3 })
     await nameInput.type(clientName)
   }
-  const confirmBtn = await findByText(page, "MODIFIER")
-  if (confirmBtn) await confirmBtn.click()
+  try { await mouseClickText(page, "MODIFIER", 5000) } catch { /* */ }
   await sleep(600)
 }
 
 async function addArticlesToInvoice(page: Page, items: DgiInvoiceItem[]) {
-  await clickText(page, "2-Articles")
-  await sleep(1000)
+  // Click "2-Articles" section using mouse coordinates
+  logger.info("DGI: clicking Articles section")
+  try {
+    await mouseClickText(page, "2-Articles", 8000)
+  } catch {
+    try {
+      await mouseClickText(page, "Articles", 5000)
+    } catch {
+      logger.warn("DGI: could not find Articles section")
+    }
+  }
+  await sleep(4000)
+  await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
+  
+  // Log what we see (longer preview to check article list)
+  const articlesPreview = await page.evaluate(() =>
+    (document.body?.innerText ?? "").replace(/\s+/g, " ").substring(0, 1500)
+  )
+  logger.info("DGI: on Articles section", { preview: articlesPreview.substring(0, 800) })
+
   for (const item of items) await addOneArticle(page, item)
 }
 
 async function addOneArticle(page: Page, item: DgiInvoiceItem) {
   logger.info("DGI: adding article to invoice", { description: item.description, quantity: item.quantity })
 
-  const added = await page.evaluate((desc) => {
-    const rows = document.querySelectorAll("tr, li, [class*='article-row'], [class*='plu']")
-    for (const row of rows) {
+  // Find the article row and its "+" button, return coordinates for mouse click
+  const plusCoords = await page.evaluate((desc) => {
+    // Look in various container types (Ionic, Angular Material, plain HTML)
+    const containers = document.querySelectorAll(
+      "ion-item, ion-row, ion-card, mat-row, [class*='mat-row'], [class*='cdk-row'], " +
+      "[role='row'], tr, li, [class*='article'], [class*='plu'], [class*='item']"
+    )
+    for (const row of containers) {
       if (row.textContent?.toLowerCase().includes(desc.toLowerCase())) {
-        const plusBtn =
-          (row.querySelector("button[class*='plus'], button[title*='plus'], button[title*='ajouter']") as HTMLElement) ??
-          (Array.from(row.querySelectorAll("button")).find((b) => b.textContent?.trim() === "+") as HTMLElement | undefined)
-        if (plusBtn) { plusBtn.click(); return true }
+        // Look for "+" button in this row
+        const btns = Array.from(row.querySelectorAll("button, ion-button, [role='button'], a, [class*='btn']"))
+        const plusBtn = btns.find((b) => {
+          const text = b.textContent?.trim() ?? ""
+          const icon = b.querySelector("ion-icon, mat-icon, i")
+          const iconName = icon?.getAttribute("name") ?? icon?.textContent?.trim() ?? ""
+          return text === "+" || text === "add" || text === "add_circle" || text === "add_circle_outline" ||
+            iconName === "add" || iconName === "add-circle" || iconName === "add_circle_outline" ||
+            iconName === "+" || (b as HTMLElement).title?.toLowerCase().includes("ajouter")
+        }) as HTMLElement | undefined
+        if (plusBtn) {
+          const rect = plusBtn.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) {
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, found: "container" }
+          }
+        }
       }
     }
-    return false
+
+    // Strategy 2: Find article text node, walk up DOM to find "+" button
+    const allEls = Array.from(document.querySelectorAll("*"))
+    const textNode = allEls.find(
+      (el) => el.childElementCount === 0 && el.textContent?.toLowerCase().includes(desc.toLowerCase())
+    )
+    if (textNode) {
+      let current: Element | null = textNode
+      for (let d = 0; d < 8; d++) {
+        if (!current) break
+        current = current.parentElement
+        if (!current) break
+        const btns = Array.from(current.querySelectorAll("button, ion-button, [role='button'], a"))
+        const plusBtn = btns.find((b) => {
+          const text = b.textContent?.trim() ?? ""
+          const icon = b.querySelector("ion-icon, mat-icon, i")
+          const iconName = icon?.getAttribute("name") ?? icon?.textContent?.trim() ?? ""
+          return text === "+" || text === "add" || text === "add_circle" || text === "add_circle_outline" ||
+            iconName === "add" || iconName === "add-circle" || iconName === "+" ||
+            (b as HTMLElement).title?.toLowerCase().includes("ajouter")
+        }) as HTMLElement | undefined
+        if (plusBtn) {
+          const rect = plusBtn.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) {
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, found: "ancestor" }
+          }
+        }
+      }
+    }
+    return null
   }, item.description)
 
-  if (!added) {
-    const found = await page.evaluate((desc) => {
-      const textNode = Array.from(document.querySelectorAll("*")).find(
-        (el) => el.childElementCount === 0 && el.textContent?.toLowerCase().includes(desc.toLowerCase())
-      )
-      if (!textNode) return false
-      for (let d = 0; d < 5; d++) {
-        const ancestor = textNode.closest(d === 0 ? "tr" : d === 1 ? "li" : "div")
-        if (!ancestor) continue
-        const btn = Array.from(ancestor.querySelectorAll("button")).find(
-          (b) => b.textContent?.trim() === "+"
-        ) as HTMLElement | undefined
-        if (btn) { btn.click(); return true }
-      }
-      return false
-    }, item.description)
-    if (!found) {
-      logger.warn("DGI: article not found in invoice article list", { description: item.description })
-      return
-    }
+  if (plusCoords) {
+    logger.info("DGI: clicking + for article", { description: item.description, ...plusCoords })
+    await page.mouse.click(plusCoords.x, plusCoords.y)
+    await sleep(1000)
+  } else {
+    logger.warn("DGI: article not found in invoice article list", { description: item.description })
   }
 
-  await sleep(500)
   if (item.quantity > 1) await setQuantity(page, item.description, item.quantity)
 }
 
@@ -1333,10 +1440,21 @@ async function setQuantity(page: Page, description: string, quantity: number) {
 
 async function normalizeInvoice(page: Page): Promise<DgiInvoiceResult> {
   logger.info("DGI: normalizing invoice")
-  await clickText(page, "APERÇU")
-  await sleep(1500)
-  await clickText(page, "NORMALISER")
-  await sleep(3000)
+
+  // Step 1: Click APERCU
+  await mouseClickText(page, "APER\u00c7U")
+  await sleep(2000)
+  await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => {})
+  logger.info("DGI: APERCU clicked")
+
+  // Step 2: Click NORMALISER
+  await mouseClickText(page, "NORMALISER")
+  logger.info("DGI: NORMALISER clicked, waiting for normalization...")
+
+  // Step 3: Wait for normalization to complete (can take several seconds on DGI)
+  await sleep(5000)
+  await page.waitForNetworkIdle({ idleTime: 2000, timeout: 20000 }).catch(() => {})
+  await sleep(2000)
 
   const dgiReference = await page.evaluate(() => {
     const allEls = Array.from(document.querySelectorAll("*"))
@@ -1391,7 +1509,15 @@ async function capturePDF(page: Page): Promise<Buffer | undefined> {
       }
     }
     page.on("response", onResponse)
-    findByText(page, "TÉLÉCHARGER LE PDF").then((btn) => btn?.click()).catch(() => {})
+    // Try multiple button text variations for downloading PDF
+    ;(async () => {
+      const downloadBtn =
+        (await findByText(page, "TÉLÉCHARGER PDF")) ??
+        (await findByText(page, "TÉLÉCHARGER LE PDF")) ??
+        (await findByText(page, "Télécharger"))
+      if (downloadBtn) downloadBtn.click()
+      else logger.warn("DGI: PDF download button not found")
+    })()
     setTimeout(() => {
       page.off("response", onResponse)
       if (!captured) { logger.warn("DGI: PDF not captured within 15s"); resolve(undefined) }
@@ -1417,7 +1543,6 @@ export async function submitInvoiceToDGI(
     const page = await getAuthenticatedPage(browser, db, username, password)
     const eufId = await getSelectedEUFId(db)
     await openEUF(page, eufId)
-    await checkArticlesExist(page, invoice.items)
     await buildInvoice(page, invoice)
     const result = await normalizeInvoice(page)
     await saveSession(db, await page.browserContext().cookies())

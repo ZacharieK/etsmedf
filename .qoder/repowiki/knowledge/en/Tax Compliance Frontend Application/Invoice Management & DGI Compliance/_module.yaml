@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: frontend/invoices
+title: Invoice Management & DGI Compliance
+scope:
+    - src/pages/InvoicesListPage.tsx
+    - src/pages/NewInvoicePage.tsx
+    - src/components/InvoiceForm.tsx
+    - src/components/InvoicePreview.tsx
+    - src/hooks/useInvoices.ts
+    - src/lib/invoiceService.ts
+    - src/types/invoice.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_functions
+    - path: frontend/pos
+    - path: frontend/dgi_articles

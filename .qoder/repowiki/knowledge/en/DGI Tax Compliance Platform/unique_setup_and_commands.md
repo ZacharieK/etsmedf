@@ -1,0 +1,1 @@
+Root-level scripts like `node scripts/import-products.mjs` are used to bootstrap Firestore data from external Excel files (`quin_articles_DGI.xlsx`), bridging offline tax records with the live cloud database before application startup.

@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: frontend/shared_ui
+title: Shared UI Component Library
+scope:
+    - src/components/ui/
+    - src/components/AppHeader.tsx
+    - src/lib/utils.ts
+    - src/index.css
+    - src/main.tsx
+    - src/router.tsx
+source_files: []
+depends_on: []
+related_to: []

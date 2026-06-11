@@ -1,0 +1,1 @@
+Orchestrates domain-specific modules through a unified authentication context, protected routing, and shared UI primitives to deliver a cohesive tax compliance interface.

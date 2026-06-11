@@ -34,6 +34,7 @@ type InvoiceFormData = z.infer<typeof invoiceSchema>
 
 interface Props {
   onGenerate: (invoice: Invoice) => void
+  isSubmitting?: boolean
 }
 
 function generateInvoiceNumber(): string {
@@ -48,7 +49,7 @@ function newItem(): InvoiceItem {
   return { id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0 }
 }
 
-export function InvoiceForm({ onGenerate }: Props) {
+export function InvoiceForm({ onGenerate, isSubmitting }: Props) {
   const [invoiceNumber] = useState(generateInvoiceNumber)
   const { articles: dgiArticles } = useStoredDGIArticles()
   const [articleIdInputs, setArticleIdInputs] = useState<Record<number, string>>({})
@@ -353,8 +354,8 @@ export function InvoiceForm({ onGenerate }: Props) {
         </CardContent>
       </Card>
 
-      <Button type="submit" size="lg" className="w-full">
-        Générer la facture
+      <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+        {isSubmitting ? "Envoi à la DGI en cours…" : "Générer la facture"}
       </Button>
     </form>
   )

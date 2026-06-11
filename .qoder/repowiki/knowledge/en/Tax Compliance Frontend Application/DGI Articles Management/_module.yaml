@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: frontend/dgi_articles
+title: DGI Articles Management
+scope:
+    - src/pages/DGIArticlesPage.tsx
+    - src/hooks/useDGIArticles.ts
+    - src/hooks/useDGIConfig.ts
+    - src/hooks/useDGIStatus.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: backend_functions
+    - path: frontend/invoices

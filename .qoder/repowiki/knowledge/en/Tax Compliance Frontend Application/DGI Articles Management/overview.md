@@ -1,0 +1,1 @@
+Manages DGI (tax authority) articles via Firestore synchronization and Cloud Function CRUD operations.

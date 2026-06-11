@@ -1,0 +1,3 @@
+- All domain-specific pages are wrapped in `ProtectedRoute` components within the router configuration to enforce authentication guards at the route definition level.
+- Shared UI primitives from `@/components/ui` are used consistently across all domain modules to maintain visual consistency and accessibility standards.
+- Custom hooks (e.g., `useInvoices`, `useDGIArticles`) encapsulate data fetching logic using TanStack Query, separating business logic from UI components.

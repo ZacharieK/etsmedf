@@ -1,0 +1,1 @@
+Uses `@sparticuz/chromium` and `puppeteer-core` for serverless headless automation, compatible with Firebase Functions' restricted environment.

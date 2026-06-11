@@ -1,0 +1,4 @@
+- The module is structured around a `src/components/ui/` directory containing atomic, headless UI components (e.g., `button`, `card`, `dialog`) built on Radix UI primitives.
+- Styling is managed via Tailwind CSS with `class-variance-authority` for variant handling and a centralized `cn` utility in `src/lib/utils.ts` for class merging.
+- Global design tokens (colors, radii) are defined in `src/index.css` using CSS variables, enabling theme consistency across all primitives.
+- The module serves as a foundational layer for the application's visual interface, consumed by higher-level components like `AppHeader` and page layouts.

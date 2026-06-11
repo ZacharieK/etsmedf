@@ -1,0 +1,1 @@
+Manages invoice lifecycle including creation, preview, status tracking, and submission to the DGI tax authority via Firebase Cloud Functions.

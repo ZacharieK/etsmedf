@@ -1,0 +1,2 @@
+- Custom hooks are used to encapsulate data fetching logic, separating API calls from UI components.
+- TypeScript interfaces are defined in service files to ensure type safety across data boundaries.

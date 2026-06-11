@@ -1,0 +1,2 @@
+- Centralized dependency management via a single `package.json` at the root, sharing common libraries like `firebase` and `xlsx` across frontend and scripting contexts.
+- Uniform TypeScript configuration split across `tsconfig.app.json` and `tsconfig.node.json` to handle distinct runtime environments for the UI and backend/scripts.

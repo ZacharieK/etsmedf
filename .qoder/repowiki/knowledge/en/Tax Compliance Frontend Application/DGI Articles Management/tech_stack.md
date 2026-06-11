@@ -1,0 +1,1 @@
+Firebase Firestore for real-time data synchronization, Firebase Cloud Functions for backend logic, TanStack Query for server-state management.

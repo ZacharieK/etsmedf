@@ -1,0 +1,4 @@
+- Centralized `AuthProvider` in `src/contexts/AuthContext.tsx` manages global session state and synchronizes with DGI backend services via Firebase Cloud Functions.
+- `src/router.tsx` enforces access control by wrapping all domain routes (invoices, DGI articles, POS) with the `ProtectedRoute` component, which relies on the shared auth context.
+- `src/lib/firebase.ts` initializes shared Firebase services (Auth, Firestore, Analytics) consumed by all child modules for data persistence and user management.
+- `src/main.tsx` composes the application shell by nesting the `RouterProvider` within the `AuthProvider` and `QueryClientProvider`, establishing the dependency injection hierarchy for state management and routing.

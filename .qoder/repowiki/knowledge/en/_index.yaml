@@ -1,0 +1,132 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: main
+exported_at: "2026-06-11T02:42:57Z"
+modules:
+    "":
+        dir_name: DGI Tax Compliance Platform
+        title: DGI Tax Compliance Platform
+        scope:
+            - README.md
+            - CLAUDE.md
+            - .gitignore
+            - firebase.json
+            - firestore.rules
+            - components.json
+            - babel.config.js
+            - eslint.config.js
+            - tsconfig.json
+            - tsconfig.app.json
+            - tsconfig.node.json
+            - vite.config.ts
+            - package.json
+            - package-lock.json
+            - index.html
+            - scripts/
+            - .env
+            - .env.example
+            - e-UF_Manuel_utilisation_v1.1.pdf
+            - quin_articles_DGI.xlsx
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    backend_functions:
+        dir_name: DGI Tax Authority Automation
+        title: DGI Tax Authority Automation
+        scope:
+            - functions/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: frontend/invoices
+            - path: frontend/dgi_articles
+            - path: frontend/auth
+            - path: frontend
+    frontend:
+        dir_name: Tax Compliance Frontend Application
+        title: Tax Compliance Frontend Application
+        scope:
+            - src/
+        source_files: []
+        children:
+            - frontend/shared_ui
+            - frontend/auth
+            - frontend/pos
+            - frontend/dgi_articles
+            - frontend/invoices
+        depends_on: []
+        related_to:
+            - path: backend_functions
+    frontend/auth:
+        dir_name: Authentication & Session Management
+        title: Authentication & Session Management
+        scope:
+            - src/pages/LoginPage.tsx
+            - src/contexts/AuthContext.tsx
+            - src/components/ProtectedRoute.tsx
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend_functions
+    frontend/dgi_articles:
+        dir_name: DGI Articles Management
+        title: DGI Articles Management
+        scope:
+            - src/pages/DGIArticlesPage.tsx
+            - src/hooks/useDGIArticles.ts
+            - src/hooks/useDGIConfig.ts
+            - src/hooks/useDGIStatus.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend_functions
+            - path: frontend/invoices
+    frontend/invoices:
+        dir_name: Invoice Management & DGI Compliance
+        title: Invoice Management & DGI Compliance
+        scope:
+            - src/pages/InvoicesListPage.tsx
+            - src/pages/NewInvoicePage.tsx
+            - src/components/InvoiceForm.tsx
+            - src/components/InvoicePreview.tsx
+            - src/hooks/useInvoices.ts
+            - src/lib/invoiceService.ts
+            - src/types/invoice.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend_functions
+            - path: frontend/pos
+            - path: frontend/dgi_articles
+    frontend/pos:
+        dir_name: Point of Sale Management
+        title: Point of Sale Management
+        scope:
+            - src/pages/PointDeVentePage.tsx
+            - src/hooks/useProducts.ts
+            - src/lib/productService.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: frontend/invoices
+    frontend/shared_ui:
+        dir_name: Shared UI Component Library
+        title: Shared UI Component Library
+        scope:
+            - src/components/ui/
+            - src/components/AppHeader.tsx
+            - src/lib/utils.ts
+            - src/index.css
+            - src/main.tsx
+            - src/router.tsx
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

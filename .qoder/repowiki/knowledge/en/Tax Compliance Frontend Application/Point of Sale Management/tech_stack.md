@@ -1,0 +1,1 @@
+Uses Firebase Firestore for persistent product storage via `firebase/firestore` and React Query for client-side data synchronization.

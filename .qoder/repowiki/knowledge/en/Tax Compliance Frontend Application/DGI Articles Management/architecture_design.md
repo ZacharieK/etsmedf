@@ -1,0 +1,4 @@
+- Entry point: `DGIArticlesPage.tsx` orchestrates UI state, form handling, and toast notifications.
+- Data layer: Custom hooks (`useDGIArticles`, `useDGIConfig`) abstract Firebase Firestore snapshots for real-time reads and Firebase Cloud Functions (`dgiListArticles`, `dgiAddArticle`, etc.) for write operations.
+- State management: React Query handles server-state caching and mutation invalidation, while local React state manages UI interactions like editing and confirmation dialogs.
+- Dependency direction: Page → Hooks → Firebase SDK (Firestore/Functions).

@@ -1,0 +1,4 @@
+- The module is structured into three distinct layers: a page component (`PointDeVentePage.tsx`) for UI and interaction logic, custom hooks (`useProducts.ts`) for data fetching state management, and a service layer (`productService.ts`) for direct database access.
+- `PointDeVentePage.tsx` acts as the primary entry point, orchestrating DGI configuration via `useDGIConfig` (imported from outside the immediate scope but central to the page's function) and handling manual/automatic e-DEF selection.
+- `useProducts.ts` leverages `@tanstack/react-query` to cache product data, exposing both a raw query hook and a derived `useProductMap` for efficient O(1) lookups by ID.
+- `productService.ts` isolates Firebase Firestore interactions, providing a typed `getProducts` function that maps document snapshots to `Product` interfaces.

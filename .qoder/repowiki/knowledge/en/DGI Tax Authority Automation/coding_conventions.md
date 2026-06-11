@@ -1,0 +1,4 @@
+- All cloud functions enforce authentication by checking `request.auth` and throwing `HttpsError('unauthenticated')` if missing.
+- Sensitive DGI credentials are accessed exclusively through `defineSecret` parameters rather than environment variables or hardcoded values.
+- Browser automation routines use a `launchBrowser` -> `try/finally` -> `browser.close()` pattern to ensure resources are released even on failure.
+- DOM interaction helpers prefer `page.evaluate` with JavaScript-native clicks over Puppeteer's synthetic `element.click()` to handle hidden or complex SPA elements.

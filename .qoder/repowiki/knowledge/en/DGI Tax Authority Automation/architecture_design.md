@@ -1,0 +1,4 @@
+- Entry point: `src/index.ts` defines Firebase Cloud Functions (v2) exposing callable endpoints for login, logout, invoice submission, and article CRUD.
+- Core logic: `src/dgiAutomation.ts` implements Puppeteer-based automation for the DGI web portal, including session persistence in Firestore, dynamic DOM scraping, and form interaction.
+- Build: TypeScript compiles to `lib/` via `tsc` (CommonJS), deployed as a Firebase Function requiring Node 20.
+- Dependencies: Relies on `firebase-admin` for state/storage, `firebase-functions` for the serverless interface, and `puppeteer-core` with `@sparticuz/chromium` for serverless-compatible headless browsing.

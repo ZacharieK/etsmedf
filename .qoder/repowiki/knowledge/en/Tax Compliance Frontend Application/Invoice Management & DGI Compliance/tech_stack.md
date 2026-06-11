@@ -1,0 +1,3 @@
+- **Firebase**: Uses Firestore for persistence and Cloud Functions (`httpsCallable`) for external DGI API integration.
+- **React Query**: Manages asynchronous server state and cache invalidation.
+- **Zod & React Hook Form**: Handles schema-based form validation and state management for complex nested invoice items.

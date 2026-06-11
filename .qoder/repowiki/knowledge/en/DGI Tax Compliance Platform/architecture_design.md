@@ -1,0 +1,4 @@
+- The root module acts as the deployment and configuration hub for a Firebase-hosted architecture, linking the `frontend` (Vite/React) and `backend_functions` (Cloud Functions) via `firebase.json`.
+- Shared infrastructure is enforced through `firestore.rules`, which mandates authentication for all data access, creating a security boundary that both the frontend client and backend automation must respect.
+- Data synchronization is managed through root-level scripts (e.g., `scripts/import-products.mjs`) that seed Firestore from external Excel sources, providing the initial state for both the UI display and the backend automation workflows.
+- Environment configuration (`.env`) and dependency management (`package.json`) are centralized at the root, ensuring consistent Node.js runtime versions and shared library access (like `firebase` and `xlsx`) across the monorepo-style structure.

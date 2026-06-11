@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: backend_functions
+title: DGI Tax Authority Automation
+scope:
+    - functions/
+source_files: []
+depends_on: []
+related_to:
+    - path: frontend/invoices
+    - path: frontend/dgi_articles
+    - path: frontend/auth
+    - path: frontend
